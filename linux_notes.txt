@@ -1,0 +1,8 @@
+NEST
+other packages need to be installed before importing nest
+
+Linux User Switch
+# nest needs root access, you need to get out of the root address to make changes in environments again
+move to user view (access conda)
+su USERNAME - (su ppowell -)
+
