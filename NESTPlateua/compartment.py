@@ -163,13 +163,109 @@ def input(neuron_name, neuron_parms=None, t_sim=100., plot=True):
             for _loc in ['top', 'right', 'bottom', 'left']: _ax.spines[_loc].set_visible(False) # hide axis outline
         for o in fig.findobj(): o.set_clip_on(False)  # disable clipping
         fig.show()
-        plt.savefig('neuron1.png')
+        plt.savefig('comp_1.png')
 
         print("spike times are " + str(ts_sp))
         return ts_sp
 
+def connect(neuron_name, spikes, ext_spikes, call_num, neuron_parms=None, t_sim=100., plot=True):
+    """
+    Run a simulation in NEST for the specified neuron. Inject a stepwise
+    current and plot the membrane potential dynamics and action potentials generated.
 
-def connect(neuron_name, spikes, neuron_parms=None, t_sim=100., plot=True):
+    Returns the number of postsynaptic action potentials that occurred.
+    """
+    dt = .1  # [ms]
+
+    nest.ResetKernel()
+    try:
+        nest.Install("nestml_active_dend_module")
+    except:
+        pass
+
+    neuron = nest.Create(neuron_name)
+
+    if neuron_parms:
+        for k, v in neuron_parms.items():
+            nest.SetStatus(neuron, k, v)
+
+    if ext_spikes != None:
+        spikes = np.append(spikes,ext_spikes)
+        spikes = [x for x in spikes if x is not None]
+        spikes.sort()
+    else:
+        spikes = spikes
+
+    sg = nest.Create("spike_generator", params={"spike_times": spikes})
+
+    multimeter = nest.Create("multimeter")
+    record_from_vars = ["V_m", "I_syn", "I_dAP"]
+    if "enable_I_syn" in neuron.get().keys():
+        record_from_vars += ["enable_I_syn"]
+    multimeter.set({"record_from": record_from_vars,
+                    "interval": dt})
+    sr_pre = nest.Create("spike_recorder")
+    sr = nest.Create("spike_recorder")
+
+    nest.Connect(sg, neuron, syn_spec={"weight": 50., "delay": 1.})
+    nest.Connect(multimeter, neuron)
+    nest.Connect(sg, sr_pre)
+    nest.Connect(neuron, sr)
+
+    nest.Simulate(t_sim)
+
+    mm = nest.GetStatus(multimeter)[0]
+    timevec = mm.get("events")["times"]
+    I_syn_ts = mm.get("events")["I_syn"]
+    I_dAP_ts = mm.get("events")["I_dAP"]
+    ts_somatic_curr = I_syn_ts + I_dAP_ts
+    if "enable_I_syn" in mm.get("events").keys():
+        enable_I_syn = mm.get("events")["enable_I_syn"]
+        ts_somatic_curr = enable_I_syn * I_syn_ts + I_dAP_ts
+
+    ts_pre_sp = nest.GetStatus(sr_pre, keys='events')[0]['times']
+    ts_sp = nest.GetStatus(sr, keys='events')[0]['times']
+    n_post_spikes = len(ts_sp)
+
+    if plot:
+        n_subplots = 3
+        n_ticks = 4
+        if "enable_I_syn" in mm.get("events").keys():
+            n_subplots += 1
+        fig, ax = plt.subplots(n_subplots, 1, dpi=100)
+        ax[0].scatter(ts_pre_sp, np.zeros_like(ts_pre_sp), marker="d", c="orange", alpha=.8, zorder=99)
+        ax[0].plot(timevec, I_syn_ts, label=r"I_syn")
+        ax[0].set_ylabel("I_syn [pA]")
+        ax[0].set_ylim(0, np.round(1.1 * np.amax(I_syn_ts) / 50) * 50)
+        ax[0].yaxis.set_major_locator(mpl.ticker.LinearLocator(n_ticks))
+        twin_ax = ax[0].twinx()
+        twin_ax.plot(timevec, I_dAP_ts, linestyle="--", label=r"I_dAP")
+        twin_ax.set_ylabel("I_dAP [pA]")
+        twin_ax.set_ylim(0, max(3, np.round(1.1 * np.amax(I_dAP_ts) / 50) * 50))
+        twin_ax.legend(loc="upper right")
+        twin_ax.yaxis.set_major_locator(mpl.ticker.LinearLocator(n_ticks))
+        ax[-2].plot(timevec, ts_somatic_curr, label="total somatic\ncurrent")
+        ax[-2].set_ylabel("[pA]")
+        if "enable_I_syn" in mm.get("events").keys():
+            ax[1].plot(timevec, enable_I_syn, label="enable_I_syn")
+            ax[1].set_ylim([-.05, 1.05])
+            ax[1].set_yticks([0, 1])
+        ax[-1].plot(timevec, mm.get("events")["V_m"], label="V_m")
+        ax[-1].scatter(ts_sp, np.zeros_like(ts_sp), marker="d", c="olivedrab", alpha=.8, zorder=99)
+        ax[-1].set_ylabel("V_m [mV]")
+        ax[-1].set_xlabel("Time [ms]")
+        for _ax in set(ax) | set([twin_ax]):
+            _ax.grid()
+            if not _ax == twin_ax: _ax.legend(loc="upper left")
+            if not _ax == ax[-1]: _ax.set_xticklabels([])
+            for _loc in ['top', 'right', 'bottom', 'left']: _ax.spines[_loc].set_visible(False)  # hide axis outline
+        for o in fig.findobj(): o.set_clip_on(False)  # disable clipping
+        fig.show()
+        plt.savefig(f'comp_{call_num}.png')
+
+        return ts_sp
+
+def output(neuron_name, spikes, neuron_parms=None, t_sim=100., plot=True):
     """
     Run a simulation in NEST for the specified neuron. Inject a stepwise
     current and plot the membrane potential dynamics and action potentials generated.
@@ -255,13 +351,21 @@ def connect(neuron_name, spikes, neuron_parms=None, t_sim=100., plot=True):
             for _loc in ['top', 'right', 'bottom', 'left']: _ax.spines[_loc].set_visible(False)  # hide axis outline
         for o in fig.findobj(): o.set_clip_on(False)  # disable clipping
         fig.show()
-        plt.savefig('neuron2.png')
+        plt.savefig('soma.png')
 
         return n_post_spikes
 
-print('here')
+num_dend_compartments = 3
+dend_comp_list = []
+ext_spikes = [None]*(num_dend_compartments)
 
-n_post_sp = input(neuron_name,neuron_parms={"I_th": 100., "I_dAP_peak": 400.})
-final_post_sp = connect(neuron_name,n_post_sp,neuron_parms={"I_th": 100., "I_dAP_peak": 400.})
+ext_spikes.insert(1,[45., 65., 75.])
 
-print("Output spikes = " +str(final_post_sp))   # check for correctness of the result
+dend_comp_list.insert(0, input(neuron_name, neuron_parms={"I_th": 100., "I_dAP_peak": 400.}))
+
+for i in range(1,num_dend_compartments):
+    dend_comp_list.insert(i,connect(neuron_name, dend_comp_list[i - 1], ext_spikes[i],i+1,neuron_parms={"I_th": 100., "I_dAP_peak": 400.}))
+
+final_post_sp = output(neuron_name, dend_comp_list[-1], neuron_parms={"I_th": 100., "I_dAP_peak": 400.})
+
+print("Output spikes = " + str(final_post_sp))   # check for correctness of the result
