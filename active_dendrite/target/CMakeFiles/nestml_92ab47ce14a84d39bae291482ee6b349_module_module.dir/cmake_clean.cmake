@@ -1,0 +1,13 @@
+file(REMOVE_RECURSE
+  "CMakeFiles/nestml_92ab47ce14a84d39bae291482ee6b349_module_module.dir/iaf_psc_exp_active_dendrite_resetting92ab47ce14a84d39bae291482ee6b349_nestml.o"
+  "CMakeFiles/nestml_92ab47ce14a84d39bae291482ee6b349_module_module.dir/iaf_psc_exp_active_dendrite_resetting92ab47ce14a84d39bae291482ee6b349_nestml.o.d"
+  "CMakeFiles/nestml_92ab47ce14a84d39bae291482ee6b349_module_module.dir/nestml_92ab47ce14a84d39bae291482ee6b349_module.o"
+  "CMakeFiles/nestml_92ab47ce14a84d39bae291482ee6b349_module_module.dir/nestml_92ab47ce14a84d39bae291482ee6b349_module.o.d"
+  "nestml_92ab47ce14a84d39bae291482ee6b349_module.pdb"
+  "nestml_92ab47ce14a84d39bae291482ee6b349_module.so"
+)
+
+# Per-language clean rules from dependency scanning.
+foreach(lang CXX)
+  include(CMakeFiles/nestml_92ab47ce14a84d39bae291482ee6b349_module_module.dir/cmake_clean_${lang}.cmake OPTIONAL)
+endforeach()
