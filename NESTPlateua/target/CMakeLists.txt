@@ -1,5 +1,5 @@
 
-# nestml_9bf4625be77440b6b997e9b367d49a09_module/CMakeLists.txt
+# nestml_3f4a549383b54af08da106f76d1a6f9d_module/CMakeLists.txt
 #
 # This file is part of NEST.
 #
@@ -31,16 +31,16 @@
 #           https://nest.github.io/nest-simulator/extension_modules
 
 # 1) Name your module here, i.e. add later with -Dexternal-modules=${moduleName}:
-set( SHORT_NAME nestml_9bf4625be77440b6b997e9b367d49a09_module )
+set( SHORT_NAME nestml_3f4a549383b54af08da106f76d1a6f9d_module )
 
 #    the complete module name is here:
 set( MODULE_NAME ${SHORT_NAME} )
 
 # 2) Add all your sources here
 set( MODULE_SOURCES
-    nestml_9bf4625be77440b6b997e9b367d49a09_module.h nestml_9bf4625be77440b6b997e9b367d49a09_module.cpp
+    nestml_3f4a549383b54af08da106f76d1a6f9d_module.h nestml_3f4a549383b54af08da106f76d1a6f9d_module.cpp
     
-      iaf_psc_exp_active_dendrite_resetting9bf4625be77440b6b997e9b367d49a09_nestml.cpp iaf_psc_exp_active_dendrite_resetting9bf4625be77440b6b997e9b367d49a09_nestml.h
+      soma3f4a549383b54af08da106f76d1a6f9d_nestml.cpp soma3f4a549383b54af08da106f76d1a6f9d_nestml.h
     
     )
 

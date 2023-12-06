@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# compartmental_model_test.py
+# comp_copiedfromtutorial.py
 #
 # This file is part of NEST.
 #
@@ -85,7 +85,6 @@ class CMTest(unittest.TestCase):
         tests_path = os.path.realpath(os.path.dirname(__file__))
         input_path = os.path.join(
             tests_path,
-            "resources",
             "cm_default.nestml"
         )
         target_path = os.path.join(

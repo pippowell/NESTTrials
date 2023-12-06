@@ -8,9 +8,9 @@ from pynestml.codegeneration.nest_code_generator_utils import NESTCodeGeneratorU
 
 # assumes that the input is coming directly into the soma and if enough input is there, you must have generated an dAP and so we add that too
 
-
-nestml_active_dend_model = '''
-neuron iaf_psc_exp_active_dendrite_resetting:
+# input compartment, accepts spikes
+first_compartment = '''
+neuron first_compartment:
     state:
         V_m mV = 0 mV     # membrane potential
         t_dAP ms = 0 ms   # dendritic action potential timer
@@ -64,6 +64,50 @@ neuron iaf_psc_exp_active_dendrite_resetting:
             I_dAP = I_dAP_peak
             # temporarily pause synaptic integration
             enable_I_syn = 0.
+
+        # emit somatic action potential
+        if V_m > V_th:
+            emit_spike()
+            V_m = V_reset
+'''
+
+#implement as dendrite compartment, accepts only constant current
+intermediate_compartment = '''
+neuron intermediate_compartment:
+    state:
+        V_m mV = 0 mV     # membrane potential
+        t_dAP ms = 0 ms   # dendritic action potential timer
+        I_dAP pA = 0 pA   # dendritic action potential current magnitude
+        enable_I_syn real = 1.   # set to 1 to allow synaptic currents to
+                                 # contribute to V_m integration, 0 otherwise
+
+    equations:
+        # alpha shaped postsynaptic current kernel
+        V_m' = -(V_m - E_L) / tau_m + (prev_amp + I_dAP + I_e) / C_m
+
+    parameters:
+        C_m pF = 250 pF          # capacity of the membrane
+        tau_m ms = 20 ms         # membrane time constant
+        tau_syn ms = 10 ms       # time constant of synaptic current
+        V_th mV = 25 mV          # action potential threshold
+        V_reset mV = 0 mV        # reset voltage
+        I_e    pA = 0 pA         # external current
+        E_L    mV = 0 mV         # resting potential
+
+        # dendritic action potential
+        I_th pA = 100 pA         # current-threshold for a dendritic action potential
+        I_dAP_peak pA = 150 pA   # current clamp value for I_dAP during a dendritic action potential
+        T_dAP ms = 10 ms         # time window over which the dendritic current clamp is active
+
+    input:
+        prev_amp pA <- continuous
+
+    output:
+        spike
+
+    update:
+        # solve ODEs
+        integrate_odes()
             
         # emit somatic action potential
         if V_m > V_th:
@@ -71,10 +115,59 @@ neuron iaf_psc_exp_active_dendrite_resetting:
             V_m = V_reset
 '''
 
-module_name, neuron_name = NESTCodeGeneratorUtils.generate_code_for(nestml_active_dend_model,
-                                                                    logging_level="ERROR")  # try "INFO" or "DEBUG" for more debug information
+# implement as soma
+soma = '''
+neuron soma:
+    state:
+        V_m mV = 0 mV     # membrane potential
+        t_dAP ms = 0 ms   # dendritic action potential timer
+        I_dAP pA = 0 pA   # dendritic action potential current magnitude
+        enable_I_syn real = 1.   # set to 1 to allow synaptic currents to
+                                 # contribute to V_m integration, 0 otherwise
 
-nest.Install(module_name)
+    equations:
+        # alpha shaped postsynaptic current kernel
+        V_m' = -(V_m - E_L) / tau_m + (prev_amp + I_dAP + I_e) / C_m
+
+    parameters:
+        C_m pF = 250 pF          # capacity of the membrane
+        tau_m ms = 20 ms         # membrane time constant
+        tau_syn ms = 10 ms       # time constant of synaptic current
+        V_th mV = 25 mV          # action potential threshold
+        V_reset mV = 0 mV        # reset voltage
+        I_e    pA = 0 pA         # external current
+        E_L    mV = 0 mV         # resting potential
+
+        # dendritic action potential
+        I_th pA = 100 pA         # current-threshold for a dendritic action potential
+        I_dAP_peak pA = 150 pA   # current clamp value for I_dAP during a dendritic action potential
+        T_dAP ms = 10 ms         # time window over which the dendritic current clamp is active
+
+    input:
+        prev_amp pA <- continuous
+
+    output:
+        spike
+
+    update:
+        # solve ODEs
+        integrate_odes()
+
+        # emit somatic action potential
+        if V_m > V_th:
+            emit_spike()
+            V_m = V_reset
+'''
+
+# make sure this is allowed, multiple models, since the input compartment must accept spikes and everything else until the output is constant current
+
+first_compartment, first_compartment= NESTCodeGeneratorUtils.generate_code_for(first_compartment,logging_level="ERROR")  # try "INFO" or "DEBUG" for more debug information
+intermediate_compartment, intermediate_compartment = NESTCodeGeneratorUtils.generate_code_for(intermediate_compartment,logging_level="ERROR")  # try "INFO" or "DEBUG" for more debug information
+soma, soma = NESTCodeGeneratorUtils.generate_code_for(soma,logging_level="ERROR")  # try "INFO" or "DEBUG" for more debug information
+
+nest.Install(first_compartment)
+nest.Install(intermediate_compartment)
+nest.Install(soma)
 
 def input(neuron_name, neuron_parms=None, t_sim=100., plot=True):
     """
@@ -165,10 +258,18 @@ def input(neuron_name, neuron_parms=None, t_sim=100., plot=True):
         fig.show()
         plt.savefig('comp_1.png')
 
-        print("spike times are " + str(ts_sp))
-        return ts_sp
+        voltage = mm.get("events")["V_m"]
+        times = mm.get("events")["times"]
 
-def connect(neuron_name, spikes, ext_spikes, call_num, neuron_parms=None, t_sim=100., plot=True):
+        #export the voltage in pA for input into the current generator in the next compartment
+        pA_current = voltage*1/25
+
+        #return the pA current history and the times they occurred at (in event times, not ms)
+        return pA_current, times
+
+
+
+def connect(neuron_name, currents, times, call_num, neuron_parms=None, t_sim=100., plot=True):
     """
     Run a simulation in NEST for the specified neuron. Inject a stepwise
     current and plot the membrane potential dynamics and action potentials generated.
@@ -189,14 +290,13 @@ def connect(neuron_name, spikes, ext_spikes, call_num, neuron_parms=None, t_sim=
         for k, v in neuron_parms.items():
             nest.SetStatus(neuron, k, v)
 
-    if ext_spikes != None:
-        spikes = np.append(spikes,ext_spikes)
-        spikes = [x for x in spikes if x is not None]
-        spikes.sort()
-    else:
-        spikes = spikes
-
-    sg = nest.Create("spike_generator", params={"spike_times": spikes})
+    cg = nest.Create("step_current_generator", params={
+        "amplitude_values": currents,
+        "amplitude_times": times,
+        "start": 0.,
+        "stop": 1000.,
+    },
+                     )
 
     multimeter = nest.Create("multimeter")
     record_from_vars = ["V_m", "I_syn", "I_dAP"]
@@ -207,9 +307,9 @@ def connect(neuron_name, spikes, ext_spikes, call_num, neuron_parms=None, t_sim=
     sr_pre = nest.Create("spike_recorder")
     sr = nest.Create("spike_recorder")
 
-    nest.Connect(sg, neuron, syn_spec={"weight": 50., "delay": 1.})
+    nest.Connect(cg, neuron, syn_spec={"weight": 50., "delay": 1.})
     nest.Connect(multimeter, neuron)
-    nest.Connect(sg, sr_pre)
+    nest.Connect(cg, sr_pre)
     nest.Connect(neuron, sr)
 
     nest.Simulate(t_sim)
@@ -263,9 +363,16 @@ def connect(neuron_name, spikes, ext_spikes, call_num, neuron_parms=None, t_sim=
         fig.show()
         plt.savefig(f'comp_{call_num}.png')
 
-        return ts_sp
+        voltage = mm.get("events")["V_m"]
+        times = mm.get("events")["times"]
 
-def output(neuron_name, spikes, neuron_parms=None, t_sim=100., plot=True):
+        # export the voltage in pA for input into the current generator in the next compartment
+        pA_current = voltage * 1 / 25
+
+        # return the pA current history and the times they occurred at (in event times, not ms)
+        return pA_current, times
+
+def output(neuron_name, currents, times, neuron_parms=None, t_sim=100., plot=True):
     """
     Run a simulation in NEST for the specified neuron. Inject a stepwise
     current and plot the membrane potential dynamics and action potentials generated.
@@ -286,7 +393,13 @@ def output(neuron_name, spikes, neuron_parms=None, t_sim=100., plot=True):
         for k, v in neuron_parms.items():
             nest.SetStatus(neuron, k, v)
 
-    sg = nest.Create("spike_generator", params={"spike_times": spikes})
+    cg = nest.Create("step_current_generator", params={
+        "amplitude_values":currents,
+        "amplitude_times":times,
+        "start": 0.,
+        "stop": 1000.,
+    },
+                     )
 
     multimeter = nest.Create("multimeter")
     record_from_vars = ["V_m", "I_syn", "I_dAP"]
@@ -297,9 +410,9 @@ def output(neuron_name, spikes, neuron_parms=None, t_sim=100., plot=True):
     sr_pre = nest.Create("spike_recorder")
     sr = nest.Create("spike_recorder")
 
-    nest.Connect(sg, neuron, syn_spec={"weight": 50., "delay": 1.})
+    nest.Connect(cg, neuron, syn_spec={"weight": 50., "delay": 1.})
     nest.Connect(multimeter, neuron)
-    nest.Connect(sg, sr_pre)
+    nest.Connect(cg, sr_pre)
     nest.Connect(neuron, sr)
 
     nest.Simulate(t_sim)
@@ -356,16 +469,19 @@ def output(neuron_name, spikes, neuron_parms=None, t_sim=100., plot=True):
         return n_post_spikes
 
 num_dend_compartments = 3
-dend_comp_list = []
-ext_spikes = [None]*(num_dend_compartments)
 
-ext_spikes.insert(1,[45., 65., 75.])
+connection_currents = []
 
-dend_comp_list.insert(0, input(neuron_name, neuron_parms={"I_th": 100., "I_dAP_peak": 400.}))
+currents, times = input(first_compartment, neuron_parms={"I_th": 100., "I_dAP_peak": 400.})
+
+compartment = {'currents': currents, 'times': times}
+connection_currents.append(compartment)
 
 for i in range(1,num_dend_compartments):
-    dend_comp_list.insert(i,connect(neuron_name, dend_comp_list[i - 1], ext_spikes[i],i+1,neuron_parms={"I_th": 100., "I_dAP_peak": 400.}))
+    currents, times = connect(intermediate_compartment, connection_currents[i-1]['currents'],connection_currents[i-1]['times'],i+1,neuron_parms={"I_th": 100., "I_dAP_peak": 400.})
+    compartment = {'currents': currents, 'times': times}
+    connection_currents.append(compartment)
 
-final_post_sp = output(neuron_name, dend_comp_list[-1], neuron_parms={"I_th": 100., "I_dAP_peak": 400.})
+final_post_sp = output(soma,connection_currents[i-1]['currents'],connection_currents[i-1]['times'], neuron_parms={"I_th": 100., "I_dAP_peak": 400.})
 
 print("Output spikes = " + str(final_post_sp))   # check for correctness of the result

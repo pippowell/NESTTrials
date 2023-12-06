@@ -67,7 +67,7 @@ include CMakeFiles/dist.dir/compiler_depend.make
 include CMakeFiles/dist.dir/progress.make
 
 CMakeFiles/dist:
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --blue --bold --progress-dir=/home/nest/NESTTrials/NESTTrials/NESTPlateua/target/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Creating a source distribution from nestml_9bf4625be77440b6b997e9b367d49a09_module..."
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --blue --bold --progress-dir=/home/nest/NESTTrials/NESTTrials/NESTPlateua/target/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Creating a source distribution from nestml_3f4a549383b54af08da106f76d1a6f9d_module..."
 	/home/nest/enter/envs/nesttrials/bin/make package_source
 
 dist: CMakeFiles/dist
