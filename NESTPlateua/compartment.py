@@ -265,3 +265,5 @@ n_post_sp = input(neuron_name,neuron_parms={"I_th": 100., "I_dAP_peak": 400.})
 final_post_sp = connect(neuron_name,n_post_sp,neuron_parms={"I_th": 100., "I_dAP_peak": 400.})
 
 print("Output spikes = " +str(final_post_sp))   # check for correctness of the result
+
+#test note
